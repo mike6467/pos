@@ -57,13 +57,13 @@ async def verify(phone: str = Form(...), code: str = Form(...), password: str = 
         code_callback = lambda: code
         password_callback = lambda: password if password.strip() else None
         
-        user = await client.start(
+        await client.start(
             phone=phone,
             code_callback=code_callback,
             password=password_callback
         )
         
-        print(f"[AUTH SUCCESS] {user.first_name}")
+        print(f"[AUTH SUCCESS] Account authenticated")
         await client.disconnect()
         return HTMLResponse("<h3>✓ Authenticated Successfully!</h3><p>Redirecting...</p><script>setTimeout(() => window.location.href = '/', 2000);</script>")
     
