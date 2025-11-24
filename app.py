@@ -10,6 +10,9 @@ from telethon import TelegramClient
 API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH", "")
 
+print(f"[STARTUP] API_ID: {API_ID}")
+print(f"[STARTUP] API_HASH: {API_HASH[:20] if API_HASH else 'NOT SET'}...")
+
 ACCOUNTS_FILE = pathlib.Path('accounts.json')
 SESSIONS_DIR = pathlib.Path('sessions')
 SESSIONS_DIR.mkdir(exist_ok=True)
@@ -141,21 +144,33 @@ async def switch_account(phone: str):
 
 async def post_to_groups(photo_file_paths: list, caption: str, active_phone: str):
     session_path = str(get_session_path(active_phone))
-    async with TelegramClient(session_path, API_ID, API_HASH) as client:
-        groups = []
-        async for dialog in client.iter_dialogs():
-            if dialog.is_group:
-                try:
-                    full_chat = await client.get_entity(dialog.entity)
-                    is_admin = full_chat.creator or (hasattr(full_chat, 'admin_rights') and full_chat.admin_rights)
-                    if not is_admin:
+    print(f"[{active_phone}] [DEBUG] Starting post_to_groups")
+    print(f"[{active_phone}] [DEBUG] Session path: {session_path}")
+    print(f"[{active_phone}] [DEBUG] API_ID: {API_ID}, API_HASH set: {bool(API_HASH)}")
+    
+    try:
+        async with TelegramClient(session_path, API_ID, API_HASH) as client:
+            print(f"[{active_phone}] [DEBUG] TelegramClient connected")
+            groups = []
+            async for dialog in client.iter_dialogs():
+                if dialog.is_group:
+                    try:
+                        full_chat = await client.get_entity(dialog.entity)
+                        is_admin = full_chat.creator or (hasattr(full_chat, 'admin_rights') and full_chat.admin_rights)
+                        if not is_admin:
+                            groups.append(dialog.entity)
+                    except:
                         groups.append(dialog.entity)
-                except:
-                    groups.append(dialog.entity)
-        
-        if not groups:
-            print(f"[{active_phone}] [ERROR] No groups found!")
-            return
+            
+            print(f"[{active_phone}] [DEBUG] Found {len(groups)} groups")
+            if not groups:
+                print(f"[{active_phone}] [ERROR] No groups found!")
+                return
+    except Exception as e:
+        print(f"[{active_phone}] [ERROR] Failed to connect TelegramClient: {e}")
+        import traceback
+        traceback.print_exc()
+        return
         
         print(f"[{active_phone}] Found {len(groups)} groups (excluding admin groups). Starting posting cycle...")
         
