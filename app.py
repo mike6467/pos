@@ -63,7 +63,11 @@ async def auth(phone: str = Form(...)):
     if not API_ID or not API_HASH:
         return HTMLResponse("<h3>Error: API credentials not configured</h3>")
     try:
-        client = TelegramClient(str(SESSIONS_DIR / 'temp'), API_ID, API_HASH)
+        temp_session = SESSIONS_DIR / 'temp'
+        if temp_session.with_suffix('.session').exists():
+            temp_session.with_suffix('.session').unlink()
+        
+        client = TelegramClient(str(temp_session), API_ID, API_HASH)
         await client.connect()
         result = await client.send_code_request(phone)
         await client.disconnect()
@@ -82,12 +86,19 @@ async def verify(phone: str = Form(...), code: str = Form(...), password: str = 
     session_name = phone.replace('+', '').replace(' ', '')
     session_path = SESSIONS_DIR / session_name
     
+    temp_session = SESSIONS_DIR / 'temp'
+    if temp_session.with_suffix('.session').exists():
+        temp_session.with_suffix('.session').unlink()
+    
     client = TelegramClient(str(session_path), API_ID, API_HASH)
     try:
         await client.connect()
         
+        code = code.strip()
+        pwd = password.strip() if password else None
+        
         code_callback = lambda: code
-        password_callback = lambda: password if password.strip() else None
+        password_callback = lambda: pwd if pwd else None
         
         await client.start(
             phone=phone,
