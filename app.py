@@ -6,15 +6,305 @@ from fastapi import FastAPI, Form, UploadFile, File
 from fastapi.responses import HTMLResponse
 from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
+import pathlib
 
 # Load API credentials from environment
-API_ID = int(os.getenv("API_ID", ""))
+API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH", "")
 
 CYCLE_DURATION = 3600  # 1 hour
 SESSION_NAME = 'telegram_session'
 
 app = FastAPI()
+
+# Check if session exists
+session_file = pathlib.Path(f'{SESSION_NAME}.session')
+
+# HTML for authentication page
+AUTH_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Telegram Authentication</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            color: #1565c0;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .submit-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        
+        .steps {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 13px;
+            color: #666;
+            line-height: 1.8;
+        }
+        
+        .step {
+            margin-bottom: 10px;
+        }
+        
+        .step strong {
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 Authenticate with Telegram</h1>
+            <p class="subtitle">One-time setup required</p>
+        </div>
+        
+        <div class="info-box">
+            ⚠️ You need to authenticate once to use this app. We'll send you a code via Telegram.
+        </div>
+        
+        <form action="/auth" method="post">
+            <div class="form-group">
+                <label>Phone Number</label>
+                <input type="tel" name="phone" placeholder="+1234567890" required>
+            </div>
+            
+            <button type="submit" class="submit-btn">📱 Send Code</button>
+        </form>
+        
+        <div class="steps" style="margin-top: 30px;">
+            <strong>How it works:</strong>
+            <div class="step">1️⃣ Enter your phone number (with country code)</div>
+            <div class="step">2️⃣ Telegram will send you a code</div>
+            <div class="step">3️⃣ Enter the code on the next page</div>
+            <div class="step">4️⃣ Done! Start posting to your groups</div>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+# HTML for code verification page
+CODE_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Verify Code</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .submit-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        
+        .info {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px;
+            border-radius: 10px;
+            color: #856404;
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✓ Code Sent!</h1>
+        <p class="subtitle">Check your Telegram app for the verification code</p>
+        
+        <div class="info">
+            📨 You should have received a code. Enter it below to complete authentication.
+        </div>
+        
+        <form action="/verify" method="post">
+            <input type="hidden" name="phone" value="{phone}">
+            
+            <div class="form-group">
+                <label>Verification Code</label>
+                <input type="text" name="code" placeholder="12345" required>
+            </div>
+            
+            <button type="submit" class="submit-btn">✓ Verify</button>
+        </form>
+    </div>
+</body>
+</html>
+"""
 
 # HTML for home page
 HOME_HTML = """
@@ -285,7 +575,67 @@ SUCCESS_HTML_TEMPLATE = """
 
 @app.get("/", response_class=HTMLResponse)
 async def home():
+    if not session_file.exists():
+        return AUTH_HTML
     return HOME_HTML
+
+@app.post("/auth")
+async def auth(phone: str = Form(...)):
+    """Start authentication with phone number"""
+    if not API_ID or not API_HASH:
+        return HTMLResponse("<h3>Error: API credentials not configured</h3>")
+    
+    try:
+        client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+        await client.connect()
+        
+        # Request code
+        result = await client.send_code_request(phone)
+        print(f"[AUTH] Code sent to {phone}")
+        
+        return HTMLResponse(CODE_HTML.format(phone=phone))
+    
+    except Exception as e:
+        print(f"[AUTH ERROR] {e}")
+        return HTMLResponse(f"<h3>Error: {str(e)}</h3><p><a href='/'>Back</a></p>")
+
+@app.post("/verify")
+async def verify(phone: str = Form(...), code: str = Form(...)):
+    """Verify the code and complete authentication"""
+    if not API_ID or not API_HASH:
+        return HTMLResponse("<h3>Error: API credentials not configured</h3>")
+    
+    try:
+        client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+        await client.connect()
+        
+        # Sign in with code
+        try:
+            user = await client.sign_in(phone, code)
+        except SessionPasswordNeededError:
+            # User has 2FA enabled - for now, show error
+            return HTMLResponse(
+                "<h3>⚠️ Two-Factor Authentication Enabled</h3>"
+                "<p>Your account has 2FA enabled. Please try again with a bot token instead.</p>"
+                "<p><a href='/'>Back to Home</a></p>"
+            )
+        
+        await client.disconnect()
+        
+        # Redirect to home
+        return HTMLResponse(
+            "<h3>✓ Authentication Successful!</h3>"
+            "<p>Redirecting...</p>"
+            "<script>setTimeout(() => window.location.href = '/', 2000);</script>"
+        )
+    
+    except Exception as e:
+        print(f"[VERIFY ERROR] {e}")
+        return HTMLResponse(
+            f"<h3>Error: Invalid code or phone number</h3>"
+            f"<p>{str(e)}</p>"
+            f"<p><a href='/'>Back to Home</a></p>"
+        )
 
 async def post_to_groups(photo_files: list[str], caption: str, groups: list[str]):
     if not API_ID or not API_HASH:
@@ -297,7 +647,7 @@ async def post_to_groups(photo_files: list[str], caption: str, groups: list[str]
         await client.connect()
         
         if not await client.is_user_authorized():
-            print("[ERROR] Client not authorized. Please authenticate first.")
+            print("[ERROR] Client not authorized.")
             await client.disconnect()
             return
         
@@ -311,17 +661,15 @@ async def post_to_groups(photo_files: list[str], caption: str, groups: list[str]
         low = avg_interval * 0.7
         high = avg_interval * 1.3
 
-        print(f"✓ Loaded {total_groups} groups with {len(photo_files)} photos. Starting posting cycle...")
+        print(f"✓ Connected. Posting to {total_groups} groups with {len(photo_files)} photos...")
 
         while True:
             for group in groups:
                 try:
                     for idx, photo_file in enumerate(photo_files):
                         if idx == 0:
-                            # Send first photo with caption
                             await client.send_file(group, photo_file, caption=caption)
                         else:
-                            # Send other photos without caption
                             await client.send_file(group, photo_file)
                     
                     print(f"[+] Sent {len(photo_files)} photo(s) to {group}")
@@ -338,7 +686,10 @@ async def post_to_groups(photo_files: list[str], caption: str, groups: list[str]
     except Exception as e:
         print(f"[CRITICAL ERROR] {e}")
     finally:
-        await client.disconnect()
+        try:
+            await client.disconnect()
+        except:
+            pass
 
 @app.post("/send")
 async def send(caption: str = Form(...), groups: str = Form(...), photos: list[UploadFile] = File(...)):
@@ -346,6 +697,13 @@ async def send(caption: str = Form(...), groups: str = Form(...), photos: list[U
     if not API_ID or not API_HASH:
         return HTMLResponse(
             "<h3 style='color: red;'>❌ Error: Telegram API credentials not configured!</h3>"
+        )
+    
+    # Check if session exists
+    if not session_file.exists():
+        return HTMLResponse(
+            "<h3 style='color: red;'>❌ Error: Not authenticated!</h3>"
+            "<p><a href='/'>← Authenticate First</a></p>"
         )
     
     # Check if at least one file was provided
@@ -358,7 +716,7 @@ async def send(caption: str = Form(...), groups: str = Form(...), photos: list[U
     # Save uploaded files temporarily
     photo_files = []
     for photo in photos:
-        if photo.filename:  # Skip empty files
+        if photo.filename:
             photo_file_path = f"temp_{int(time.time())}_{photo.filename}"
             with open(photo_file_path, "wb") as f:
                 f.write(await photo.read())
