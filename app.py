@@ -92,17 +92,56 @@ async def post_to_groups(photo_file_paths: list, caption: str):
         
         print(f"Found {len(groups)} groups (excluding admin groups). Starting posting cycle...")
         
+        # Track last message ID for each group to detect new messages
+        last_message_ids = {}
+        
         while True:
             for group in groups:
                 try:
-                    await client.send_file(group, photo_file_paths, caption=caption)
                     group_name = group.title if hasattr(group, 'title') else group
+                    
+                    # On first cycle or subsequent cycles, check for new messages
+                    has_new_messages = True
+                    if group.id in last_message_ids:
+                        try:
+                            # Get the last message in the group
+                            messages = await client.get_messages(group, limit=1)
+                            if messages:
+                                latest_msg_id = messages[0].id
+                                # Only post if there's a newer message than our last message
+                                if latest_msg_id <= last_message_ids[group.id]:
+                                    print(f"[-] Skipped {group_name} (no new messages since last post)")
+                                    await asyncio.sleep(5)
+                                    continue
+                        except Exception as e:
+                            print(f"[WARNING] Could not check messages in {group_name}: {e}")
+                    
+                    # Post the content
+                    await client.send_file(group, photo_file_paths, caption=caption)
+                    
+                    # Store the message ID after posting
+                    try:
+                        messages = await client.get_messages(group, limit=1)
+                        if messages:
+                            last_message_ids[group.id] = messages[0].id
+                    except:
+                        pass
+                    
                     print(f"[+] Sent {len(photo_file_paths)} images to {group_name}")
                     await asyncio.sleep(5)
                 except Exception as e:
                     if "CHAT_SEND_PHOTOS_FORBIDDEN" in str(e):
                         try:
                             await client.send_message(group, caption)
+                            
+                            # Store the message ID after posting
+                            try:
+                                messages = await client.get_messages(group, limit=1)
+                                if messages:
+                                    last_message_ids[group.id] = messages[0].id
+                            except:
+                                pass
+                            
                             group_name = group.title if hasattr(group, 'title') else group
                             print(f"[+] Sent caption only to {group_name} (photos forbidden)")
                             await asyncio.sleep(5)
