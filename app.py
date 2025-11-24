@@ -55,30 +55,31 @@ async def verify(phone: str = Form(...), code: str = Form(...), phone_code_hash:
     try:
         await client.connect()
         
-        needs_2fa = False
         try:
-            user = await client.sign_in(phone, code, phone_code_hash=phone_code_hash)
+            print(f"[AUTH] Attempting sign in with code for {phone}")
+            user = await client.sign_in(phone=phone, code=code, phone_code_hash=phone_code_hash)
             print(f"[AUTH SUCCESS] {user.first_name}")
-        except SessionPasswordNeededError:
-            needs_2fa = True
-            print("[AUTH] 2FA password required")
+            await client.disconnect()
+            return HTMLResponse("<h3>✓ Authenticated Successfully!</h3><p>Redirecting...</p><script>setTimeout(() => window.location.href = '/', 2000);</script>")
         
-        if needs_2fa:
+        except SessionPasswordNeededError:
+            print("[AUTH] 2FA password required - attempting with password only")
+            
             if not password or password.strip() == "":
                 await client.disconnect()
                 return HTMLResponse("<h3>❌ 2FA Password Required</h3><p>Your account has 2FA enabled. Please enter your account password (not the verification code).</p><p><a href='/'>Back to start</a></p>")
             
             try:
-                print(f"[AUTH] Attempting 2FA with password...")
+                print(f"[AUTH] Calling sign_in with password only")
                 user = await client.sign_in(password=password)
                 print(f"[AUTH SUCCESS with 2FA] {user.first_name}")
+                await client.disconnect()
+                return HTMLResponse("<h3>✓ Authenticated Successfully!</h3><p>Redirecting...</p><script>setTimeout(() => window.location.href = '/', 2000);</script>")
+            
             except Exception as e2:
                 print(f"[2FA ERROR] {type(e2).__name__}: {str(e2)}")
                 await client.disconnect()
-                return HTMLResponse(f"<h3>❌ Incorrect Password</h3><p>The password you entered is incorrect. Make sure you're using your account password, not the verification code.</p><p><a href='/'>Back to start</a></p>")
-        
-        await client.disconnect()
-        return HTMLResponse("<h3>✓ Authenticated Successfully!</h3><p>Redirecting...</p><script>setTimeout(() => window.location.href = '/', 2000);</script>")
+                return HTMLResponse(f"<h3>❌ Invalid Password</h3><p>The password you entered doesn't match your account. This usually means the password is wrong. If you forgot your password, you may need to reset 2FA or contact Telegram support.</p><p><a href='/'>Back to start</a></p>")
     
     except Exception as e:
         print(f"[VERIFY ERROR] {str(e)}")
