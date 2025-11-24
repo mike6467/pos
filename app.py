@@ -150,8 +150,8 @@ async def post_to_groups(photo_file_paths: list, caption: str):
                     else:
                         print(f"[ERROR] Failed to send to {group}: {e}")
             
-            print("===== Cycle completed. Waiting 30 minutes before next cycle... =====")
-            await asyncio.sleep(1800)
+            print("===== Cycle completed. Waiting 10 minutes before next cycle... =====")
+            await asyncio.sleep(600)
 
 @app.post("/send")
 async def send(caption: str = Form(...), photos: list[UploadFile] = File(...)):
@@ -167,4 +167,4 @@ async def send(caption: str = Form(...), photos: list[UploadFile] = File(...)):
     import asyncio as aio
     aio.create_task(post_to_groups(photo_paths, caption))
     
-    return HTMLResponse(f"<h3>✓ Started posting {len(photo_paths)} images to all your groups!</h3><p>Posts will be sent with 1-minute intervals, then 30-minute wait between cycles.</p><p><a href='/'>Back home</a></p>")
+    return HTMLResponse(f"<h3>✓ Started posting {len(photo_paths)} images to all your groups!</h3><p>Posts will be sent with 5-second intervals between groups, then 10-minute wait before next cycle.</p><p><a href='/'>Back home</a></p>")
