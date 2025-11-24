@@ -100,7 +100,16 @@ async def post_to_groups(photo_file_paths: list, caption: str):
                     print(f"[+] Sent {len(photo_file_paths)} images to {group_name}")
                     await asyncio.sleep(5)
                 except Exception as e:
-                    print(f"[ERROR] Failed to send to {group}: {e}")
+                    if "CHAT_SEND_PHOTOS_FORBIDDEN" in str(e):
+                        try:
+                            await client.send_message(group, caption)
+                            group_name = group.title if hasattr(group, 'title') else group
+                            print(f"[+] Sent caption only to {group_name} (photos forbidden)")
+                            await asyncio.sleep(5)
+                        except Exception as e2:
+                            print(f"[ERROR] Failed to send caption to {group}: {e2}")
+                    else:
+                        print(f"[ERROR] Failed to send to {group}: {e}")
             
             print("===== Cycle completed. Waiting 30 minutes before next cycle... =====")
             await asyncio.sleep(1800)
