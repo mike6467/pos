@@ -1,0 +1,5 @@
+aiohttp==3.13.2
+fastapi==0.121.3
+python-multipart==0.0.20
+uvicorn==0.38.0
+telethon==1.38.2
