@@ -5,8 +5,6 @@ import time
 from fastapi import FastAPI, Form, UploadFile, File
 from fastapi.responses import HTMLResponse
 from telethon import TelegramClient
-from telethon.errors import SessionPasswordNeededError
-import pathlib
 
 # Load API credentials from environment
 API_ID = int(os.getenv("API_ID", "1234567"))
@@ -15,63 +13,6 @@ API_HASH = os.getenv("API_HASH", "your_api_hash_here")
 CYCLE_DURATION = 3600  # 1 hour
 
 app = FastAPI()
-
-session_file = pathlib.Path('session.session')
-
-SETUP_HTML = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Telegram Authentication Setup</title>
-    <style>
-        body { font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px; }
-        .form-group { margin: 20px 0; }
-        input, textarea { width: 100%; padding: 10px; font-size: 14px; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
-    </style>
-</head>
-<body>
-    <h1>🔐 Initial Setup - Authenticate with Telegram</h1>
-    <p>This is a one-time setup. Enter your phone number below:</p>
-    
-    <form action="/auth-phone" method="post">
-        <div class="form-group">
-            <label>Phone Number (with country code):</label>
-            <input type="tel" name="phone" placeholder="+1234567890" required>
-        </div>
-        <button type="submit">Send Code</button>
-    </form>
-</body>
-</html>
-"""
-
-VERIFY_HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Verify Code</title>
-    <style>
-        body { font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px; }
-        .form-group { margin: 20px 0; }
-        input { width: 100%; padding: 10px; font-size: 14px; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
-    </style>
-</head>
-<body>
-    <h1>Verify Code</h1>
-    <p>Check your Telegram app for the verification code</p>
-    
-    <form action="/auth-verify" method="post">
-        <input type="hidden" name="phone" value="{phone}">
-        <div class="form-group">
-            <label>Verification Code:</label>
-            <input type="text" name="code" placeholder="12345" required>
-        </div>
-        <button type="submit">Verify</button>
-    </form>
-</body>
-</html>
-"""
 
 HTML_FORM = """
 <!DOCTYPE html>
@@ -99,48 +40,7 @@ HTML_FORM = """
 
 @app.get("/", response_class=HTMLResponse)
 async def home():
-    if not session_file.exists():
-        return SETUP_HTML
     return HTML_FORM
-
-@app.post("/auth-phone")
-async def auth_phone(phone: str = Form(...)):
-    """Send code to phone"""
-    try:
-        client = TelegramClient('session', API_ID, API_HASH)
-        await client.connect()
-        result = await client.send_code_request(phone)
-        await client.disconnect()
-        
-        print(f"[AUTH] Code sent to {phone}")
-        return HTMLResponse(VERIFY_HTML_TEMPLATE.format(phone=phone))
-    except Exception as e:
-        print(f"[ERROR] {e}")
-        return HTMLResponse(f"<h3>Error: {str(e)}</h3><p><a href='/'>Back</a></p>")
-
-@app.post("/auth-verify")
-async def auth_verify(phone: str = Form(...), code: str = Form(...)):
-    """Verify code and authenticate"""
-    try:
-        client = TelegramClient('session', API_ID, API_HASH)
-        await client.connect()
-        
-        try:
-            user = await client.sign_in(phone, code)
-            print(f"[AUTH SUCCESS] {user.first_name}")
-            await client.disconnect()
-            
-            return HTMLResponse("""
-                <h3>✓ Authentication Successful!</h3>
-                <p>Redirecting...</p>
-                <script>setTimeout(() => window.location.href = '/', 2000);</script>
-            """)
-        except SessionPasswordNeededError:
-            await client.disconnect()
-            return HTMLResponse("<h3>Error: 2FA enabled - not supported yet</h3><p><a href='/'>Back</a></p>")
-    except Exception as e:
-        print(f"[VERIFY ERROR] {e}")
-        return HTMLResponse(f"<h3>Error: {str(e)}</h3><p><a href='/'>Back</a></p>")
 
 async def post_to_groups(photo_file_path: str, caption: str, groups: list[str]):
     async with TelegramClient('session', API_ID, API_HASH) as client:
