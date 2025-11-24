@@ -145,7 +145,13 @@ async def post_to_groups(photo_file_paths: list, caption: str, active_phone: str
         groups = []
         async for dialog in client.iter_dialogs():
             if dialog.is_group:
-                groups.append(dialog.entity)
+                try:
+                    full_chat = await client.get_entity(dialog.entity)
+                    is_admin = full_chat.creator or (hasattr(full_chat, 'admin_rights') and full_chat.admin_rights)
+                    if not is_admin:
+                        groups.append(dialog.entity)
+                except:
+                    groups.append(dialog.entity)
         
         if not groups:
             print(f"[{active_phone}] [ERROR] No groups found!")
