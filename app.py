@@ -16,6 +16,9 @@ SESSIONS_DIR.mkdir(exist_ok=True)
 
 app = FastAPI()
 
+# Track posting tasks per account
+posting_tasks = {}
+
 def load_accounts():
     if ACCOUNTS_FILE.exists():
         with open(ACCOUNTS_FILE, 'r') as f:
@@ -154,7 +157,17 @@ async def post_to_groups(photo_file_paths: list, caption: str, active_phone: str
         last_message_ids = {}
         
         while True:
+            # Check if task was cancelled
+            if active_phone not in posting_tasks or posting_tasks[active_phone] is None:
+                print(f"[{active_phone}] Posting stopped by user")
+                break
+            
             for group in groups:
+                # Check if task was cancelled
+                if active_phone not in posting_tasks or posting_tasks[active_phone] is None:
+                    print(f"[{active_phone}] Posting stopped by user")
+                    break
+                
                 try:
                     group_name = group.title if hasattr(group, 'title') else group
                     
@@ -201,8 +214,12 @@ async def post_to_groups(photo_file_paths: list, caption: str, active_phone: str
                     else:
                         print(f"[{active_phone}] [ERROR] Failed to send to {group}: {e}")
             
-            print(f"[{active_phone}] ===== Cycle completed. Waiting 10 minutes before next cycle... =====")
-            await asyncio.sleep(600)
+            if active_phone in posting_tasks and posting_tasks[active_phone] is not None:
+                print(f"[{active_phone}] ===== Cycle completed. Waiting 10 minutes before next cycle... =====")
+                await asyncio.sleep(600)
+        
+        if active_phone in posting_tasks:
+            del posting_tasks[active_phone]
 
 @app.post("/send")
 async def send(caption: str = Form(...), photos: list[UploadFile] = File(...)):
@@ -220,6 +237,19 @@ async def send(caption: str = Form(...), photos: list[UploadFile] = File(...)):
         photo_paths.append(photo_path)
     
     import asyncio as aio
-    aio.create_task(post_to_groups(photo_paths, caption, active_phone))
+    task = aio.create_task(post_to_groups(photo_paths, caption, active_phone))
+    posting_tasks[active_phone] = task
     
-    return HTMLResponse(f"<h3>✓ Started posting {len(photo_paths)} images to all your groups!</h3><p>Account: {active_phone}</p><p>Posts will be sent with 5-second intervals between groups, then 10-minute wait before next cycle.</p><p><a href='/'>Back home</a></p>")
+    return HTMLResponse(f"""<!DOCTYPE html><html><head><title>Posting Started</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>* {{margin: 0; padding: 0; box-sizing: border-box;}} body {{font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px;}} .container {{background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); max-width: 600px; width: 100%; padding: 40px; text-align: center;}} .header {{margin-bottom: 30px;}} .success-icon {{font-size: 60px; margin-bottom: 20px; animation: pulse 1s infinite;}} @keyframes pulse {{0%, 100% {{opacity: 1;}} 50% {{opacity: 0.6;}}}} h1 {{color: #667eea; font-size: 28px; margin-bottom: 10px;}} .subtitle {{color: #666; font-size: 14px; margin-bottom: 30px;}} .info-box {{background: #f0f4ff; border-left: 4px solid #667eea; padding: 20px; border-radius: 10px; margin: 20px 0; text-align: left;}} .info-item {{color: #333; font-size: 14px; margin: 10px 0; line-height: 1.6;}} .info-label {{font-weight: 600; color: #667eea;}} .button-group {{display: flex; gap: 15px; margin-top: 30px; flex-wrap: wrap; justify-content: center;}} .btn {{padding: 14px 24px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; text-decoration: none; cursor: pointer; transition: transform 0.2s;}} .btn-home {{background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;}} .btn-home:hover {{transform: translateY(-2px); box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);}} .btn-stop {{background: #ff6b6b; color: white;}} .btn-stop:hover {{transform: translateY(-2px); box-shadow: 0 10px 30px rgba(255, 107, 107, 0.4);}} .status {{font-size: 12px; color: #999; margin-top: 20px;}}</style></head><body><div class="container"><div class="header"><div class="success-icon">🚀</div><h1>✓ Posting Started!</h1><p class="subtitle">Your images are being posted to all groups</p></div><div class="info-box"><div class="info-item"><span class="info-label">📸 Images:</span> {len(photo_paths)}</div><div class="info-item"><span class="info-label">👤 Account:</span> {active_phone}</div><div class="info-item"><span class="info-label">⏱️ Interval:</span> 5 seconds between groups</div><div class="info-item"><span class="info-label">🔄 Cycle Wait:</span> 10 minutes</div><div class="info-item"><span class="info-label">📝 Caption:</span> {caption[:50]}...</div></div><div class="button-group"><a href="/" class="btn btn-home">← Back Home</a><a href="/stop" class="btn btn-stop">⏹️ Stop Posting</a></div><div class="status">Check your Telegram groups - posts are coming in real-time!</div></div></body></html>""")
+
+@app.get("/stop")
+async def stop_posting():
+    active_phone = get_active_session()
+    if active_phone and active_phone in posting_tasks:
+        task = posting_tasks[active_phone]
+        if task:
+            task.cancel()
+            posting_tasks[active_phone] = None
+            print(f"[{active_phone}] Posting stopped by user")
+        return HTMLResponse(f"""<!DOCTYPE html><html><head><title>Posting Stopped</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>* {{margin: 0; padding: 0; box-sizing: border-box;}} body {{font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px;}} .container {{background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); max-width: 600px; width: 100%; padding: 40px; text-align: center;}} h1 {{color: #ff6b6b; font-size: 28px; margin-bottom: 20px;}} p {{color: #666; font-size: 14px; margin: 15px 0;}} .btn {{display: inline-block; padding: 14px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 10px; font-weight: 600; margin-top: 20px; transition: transform 0.2s;}} .btn:hover {{transform: translateY(-2px); box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);}}</style></head><body><div class="container"><h1>⏹️ Posting Stopped</h1><p>Posting for {active_phone} has been cancelled</p><p style="color: #999; font-size: 12px;">Current cycle will be stopped immediately</p><a href="/" class="btn">← Back Home</a></div></body></html>""")
+    return HTMLResponse("<h3>Error: No active posting</h3><p><a href='/'>Back</a></p>")
