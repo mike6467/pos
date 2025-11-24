@@ -93,14 +93,14 @@ async def post_to_groups(photo_file_paths: list, caption: str):
         print(f"Found {len(groups)} groups (excluding admin groups). Starting posting cycle...")
         
         while True:
-            for photo_path in photo_file_paths:
-                for group in groups:
-                    try:
-                        await client.send_file(group, photo_path, caption=caption)
-                        print(f"[+] Sent '{photo_path}' to {group.title if hasattr(group, 'title') else group}")
-                        await asyncio.sleep(5)
-                    except Exception as e:
-                        print(f"[ERROR] Failed to send to {group}: {e}")
+            for group in groups:
+                try:
+                    await client.send_file(group, photo_file_paths, caption=caption)
+                    group_name = group.title if hasattr(group, 'title') else group
+                    print(f"[+] Sent {len(photo_file_paths)} images to {group_name}")
+                    await asyncio.sleep(5)
+                except Exception as e:
+                    print(f"[ERROR] Failed to send to {group}: {e}")
             
             print("===== Cycle completed. Waiting 30 minutes before next cycle... =====")
             await asyncio.sleep(1800)
