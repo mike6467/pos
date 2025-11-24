@@ -166,80 +166,78 @@ async def post_to_groups(photo_file_paths: list, caption: str, active_phone: str
             if not groups:
                 print(f"[{active_phone}] [ERROR] No groups found!")
                 return
+            
+            print(f"[{active_phone}] Found {len(groups)} groups. Starting posting cycle...")
+            
+            last_message_ids = {}
+            
+            while True:
+                if active_phone not in posting_tasks or posting_tasks[active_phone] is None:
+                    print(f"[{active_phone}] Posting stopped by user")
+                    break
+                
+                for group in groups:
+                    if active_phone not in posting_tasks or posting_tasks[active_phone] is None:
+                        print(f"[{active_phone}] Posting stopped by user")
+                        break
+                    
+                    try:
+                        group_name = group.title if hasattr(group, 'title') else group
+                        
+                        if group.id in last_message_ids:
+                            try:
+                                messages = await client.get_messages(group, limit=1)
+                                if messages:
+                                    latest_msg_id = messages[0].id
+                                    if latest_msg_id <= last_message_ids[group.id]:
+                                        print(f"[{active_phone}] [-] Skipped {group_name} (no new messages since last post)")
+                                        await asyncio.sleep(5)
+                                        continue
+                            except Exception as e:
+                                print(f"[{active_phone}] [WARNING] Could not check messages in {group_name}: {e}")
+                        
+                        await client.send_file(group, photo_file_paths, caption=caption)
+                        
+                        try:
+                            messages = await client.get_messages(group, limit=1)
+                            if messages:
+                                last_message_ids[group.id] = messages[0].id
+                        except:
+                            pass
+                        
+                        print(f"[{active_phone}] [+] Sent {len(photo_file_paths)} images to {group_name}")
+                        await asyncio.sleep(5)
+                    except Exception as e:
+                        if "CHAT_SEND_PHOTOS_FORBIDDEN" in str(e):
+                            try:
+                                await client.send_message(group, caption)
+                                
+                                try:
+                                    messages = await client.get_messages(group, limit=1)
+                                    if messages:
+                                        last_message_ids[group.id] = messages[0].id
+                                except:
+                                    pass
+                                
+                                group_name = group.title if hasattr(group, 'title') else group
+                                print(f"[{active_phone}] [+] Sent caption only to {group_name} (photos forbidden)")
+                                await asyncio.sleep(5)
+                            except Exception as e2:
+                                print(f"[{active_phone}] [ERROR] Failed to send caption to {group}: {e2}")
+                        else:
+                            print(f"[{active_phone}] [ERROR] Failed to send to {group}: {e}")
+                
+                if active_phone in posting_tasks and posting_tasks[active_phone] is not None:
+                    print(f"[{active_phone}] ===== Cycle completed. Waiting 10 minutes before next cycle... =====")
+                    await asyncio.sleep(600)
+            
+            if active_phone in posting_tasks:
+                del posting_tasks[active_phone]
     except Exception as e:
         print(f"[{active_phone}] [ERROR] Failed to connect TelegramClient: {e}")
         import traceback
         traceback.print_exc()
         return
-        
-        print(f"[{active_phone}] Found {len(groups)} groups (excluding admin groups). Starting posting cycle...")
-        
-        last_message_ids = {}
-        
-        while True:
-            # Check if task was cancelled
-            if active_phone not in posting_tasks or posting_tasks[active_phone] is None:
-                print(f"[{active_phone}] Posting stopped by user")
-                break
-            
-            for group in groups:
-                # Check if task was cancelled
-                if active_phone not in posting_tasks or posting_tasks[active_phone] is None:
-                    print(f"[{active_phone}] Posting stopped by user")
-                    break
-                
-                try:
-                    group_name = group.title if hasattr(group, 'title') else group
-                    
-                    if group.id in last_message_ids:
-                        try:
-                            messages = await client.get_messages(group, limit=1)
-                            if messages:
-                                latest_msg_id = messages[0].id
-                                if latest_msg_id <= last_message_ids[group.id]:
-                                    print(f"[{active_phone}] [-] Skipped {group_name} (no new messages since last post)")
-                                    await asyncio.sleep(5)
-                                    continue
-                        except Exception as e:
-                            print(f"[{active_phone}] [WARNING] Could not check messages in {group_name}: {e}")
-                    
-                    await client.send_file(group, photo_file_paths, caption=caption)
-                    
-                    try:
-                        messages = await client.get_messages(group, limit=1)
-                        if messages:
-                            last_message_ids[group.id] = messages[0].id
-                    except:
-                        pass
-                    
-                    print(f"[{active_phone}] [+] Sent {len(photo_file_paths)} images to {group_name}")
-                    await asyncio.sleep(5)
-                except Exception as e:
-                    if "CHAT_SEND_PHOTOS_FORBIDDEN" in str(e):
-                        try:
-                            await client.send_message(group, caption)
-                            
-                            try:
-                                messages = await client.get_messages(group, limit=1)
-                                if messages:
-                                    last_message_ids[group.id] = messages[0].id
-                            except:
-                                pass
-                            
-                            group_name = group.title if hasattr(group, 'title') else group
-                            print(f"[{active_phone}] [+] Sent caption only to {group_name} (photos forbidden)")
-                            await asyncio.sleep(5)
-                        except Exception as e2:
-                            print(f"[{active_phone}] [ERROR] Failed to send caption to {group}: {e2}")
-                    else:
-                        print(f"[{active_phone}] [ERROR] Failed to send to {group}: {e}")
-            
-            if active_phone in posting_tasks and posting_tasks[active_phone] is not None:
-                print(f"[{active_phone}] ===== Cycle completed. Waiting 10 minutes before next cycle... =====")
-                await asyncio.sleep(600)
-        
-        if active_phone in posting_tasks:
-            del posting_tasks[active_phone]
 
 @app.post("/send")
 async def send(caption: str = Form(...), photos: list[UploadFile] = File(...)):
