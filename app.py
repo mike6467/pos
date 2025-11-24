@@ -6,6 +6,7 @@ from fastapi import FastAPI, Form, UploadFile, File
 from fastapi.responses import HTMLResponse
 from telethon import TelegramClient
 import pathlib
+from contextlib import asynccontextmanager
 
 API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH", "")
@@ -14,7 +15,56 @@ SESSIONS_DIR = pathlib.Path('sessions')
 SESSIONS_DIR.mkdir(exist_ok=True)
 ACTIVE_SESSION_FILE = pathlib.Path('active_session.txt')
 
-app = FastAPI()
+posting_task = None
+posting_active = False
+
+async def posting_background_loop():
+    """Runs the posting cycle without blocking the server"""
+    global posting_active
+    posting_active = True
+    while posting_active:
+        try:
+            active = get_active_session()
+            if active:
+                session_path = SESSIONS_DIR / active
+                async with TelegramClient(str(session_path), API_ID, API_HASH) as client:
+                    groups = []
+                    async for dialog in client.iter_dialogs():
+                        if dialog.is_group:
+                            try:
+                                full_chat = await client.get_entity(dialog.entity)
+                                is_admin = full_chat.creator or (hasattr(full_chat, 'admin_rights') and full_chat.admin_rights)
+                                if not is_admin:
+                                    groups.append(dialog.entity)
+                            except:
+                                groups.append(dialog.entity)
+                    
+                    if groups:
+                        print(f"[BACKGROUND] Found {len(groups)} groups. Checking for new content...")
+                        last_message_ids = {}
+                        for group in groups:
+                            try:
+                                group_name = group.title if hasattr(group, 'title') else group
+                                messages = await client.get_messages(group, limit=1)
+                                if messages:
+                                    last_message_ids[group.id] = messages[0].id
+                            except:
+                                pass
+                    else:
+                        print("[BACKGROUND] No groups found to monitor")
+        except Exception as e:
+            print(f"[BACKGROUND ERROR] {e}")
+        
+        await asyncio.sleep(600)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown events"""
+    yield
+    global posting_active
+    posting_active = False
+
+app = FastAPI(lifespan=lifespan)
 
 def get_active_session():
     if ACTIVE_SESSION_FILE.exists():
