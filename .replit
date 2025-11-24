@@ -9,8 +9,8 @@ packages = ["openssl"]
 [userenv]
 
 [userenv.shared]
-API_ID = "1234567"
-API_HASH = "your_api_hash_here"
+API_ID = "39693716"
+API_HASH = "bfd172454d30c227f28889a77a32e7f1"
 
 [workflows]
 runButton = "Project"
