@@ -53,19 +53,28 @@ async def verify(phone: str = Form(...), code: str = Form(...), phone_code_hash:
     try:
         client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
         await client.connect()
+        
+        needs_2fa = False
         try:
             user = await client.sign_in(phone, code, phone_code_hash=phone_code_hash)
             print(f"[AUTH SUCCESS] {user.first_name}")
         except SessionPasswordNeededError:
-            if not password:
+            needs_2fa = True
+            print("[AUTH] 2FA password required")
+        
+        if needs_2fa:
+            if not password or password.strip() == "":
                 await client.disconnect()
-                return HTMLResponse("<h3>2FA Password Required</h3><p>Your account has 2FA enabled. Please go back and enter your 2FA password in the password field.</p><p><a href='/'>Back</a></p>")
+                return HTMLResponse("<h3>❌ 2FA Password Required</h3><p>Your account has 2FA enabled. Please go back and enter your 2FA password.</p><p><a href='/'>Back to start</a></p>")
+            
             try:
                 user = await client.sign_in(password=password)
                 print(f"[AUTH SUCCESS with 2FA] {user.first_name}")
             except Exception as e2:
+                print(f"[2FA ERROR] {str(e2)}")
                 await client.disconnect()
-                return HTMLResponse(f"<h3>Error: Invalid 2FA password</h3><p>{str(e2)}</p><p><a href='/'>Back</a></p>")
+                return HTMLResponse(f"<h3>❌ Invalid 2FA Password</h3><p>Error: {str(e2)}</p><p><a href='/'>Back to start</a></p>")
+        
         await client.disconnect()
         return HTMLResponse("<h3>✓ Authenticated Successfully!</h3><p>Redirecting...</p><script>setTimeout(() => window.location.href = '/', 2000);</script>")
     except Exception as e:
