@@ -17,7 +17,6 @@ SESSION_NAME = 'telegram_session'
 
 app = FastAPI()
 
-# Check if session exists
 session_file = pathlib.Path(f'{SESSION_NAME}.session')
 
 # HTML for authentication page
@@ -177,7 +176,6 @@ AUTH_HTML = """
 </html>
 """
 
-# HTML for code verification page
 CODE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -292,7 +290,8 @@ CODE_HTML = """
         </div>
         
         <form action="/verify" method="post">
-            <input type="hidden" name="phone" value="{phone}">
+            <input type="hidden" name="phone" value="PHONE_PLACEHOLDER">
+            <input type="hidden" name="phone_code_hash" value="HASH_PLACEHOLDER">
             
             <div class="form-group">
                 <label>Verification Code</label>
@@ -306,7 +305,6 @@ CODE_HTML = """
 </html>
 """
 
-# HTML for home page
 HOME_HTML = """
 <!DOCTYPE html>
 <html>
@@ -434,16 +432,6 @@ HOME_HTML = """
             border-bottom: none;
         }
         
-        .group-instructions {
-            background: #f0f4ff;
-            padding: 12px;
-            border-radius: 10px;
-            margin-bottom: 12px;
-            font-size: 13px;
-            color: #555;
-            border-left: 4px solid #667eea;
-        }
-        
         .submit-btn {
             width: 100%;
             padding: 16px;
@@ -454,27 +442,14 @@ HOME_HTML = """
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
             text-transform: uppercase;
             letter-spacing: 1px;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
         
         .submit-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
-        }
-        
-        .submit-btn:active {
-            transform: translateY(0);
-        }
-        
-        .status-box {
-            background: #e8f5e9;
-            border-left: 4px solid #4caf50;
-            padding: 12px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            color: #2e7d32;
         }
     </style>
 </head>
@@ -485,32 +460,24 @@ HOME_HTML = """
             <p class="subtitle">Schedule and automate your posts to multiple Telegram groups</p>
         </div>
         
-        <div class="status-box">
-            ✓ Authenticated and ready to post!
-        </div>
-        
         <form action="/send" enctype="multipart/form-data" method="post">
             <div class="form-group">
-                <label>Post Caption</label>
+                <label>Caption:</label>
                 <textarea name="caption" rows="4" placeholder="Enter your post caption here..."></textarea>
             </div>
             
             <div class="form-group">
-                <label>Upload Photos (Multiple Allowed)</label>
+                <label>Photo:</label>
                 <div class="file-input-wrapper">
-                    <input type="file" name="photos" id="photos" multiple accept="image/*" required>
-                    <label for="photos" class="file-input-label">📸 Click to select images</label>
+                    <input type="file" name="photo" id="photo" accept="image/*" required>
+                    <label for="photo" class="file-input-label">📸 Click to select image</label>
                 </div>
                 <div class="file-list" id="fileList" style="display: none;"></div>
             </div>
             
             <div class="form-group">
-                <label>Telegram Group Links</label>
-                <div class="group-instructions">
-                    ✓ Enter one group link per line<br>
-                    ✓ Examples: @groupname, t.me/groupname, https://t.me/groupname
-                </div>
-                <textarea name="groups" rows="8" placeholder="@group1&#10;@group2&#10;https://t.me/group3&#10;..." required></textarea>
+                <label>Groups (one link per line):</label>
+                <textarea name="groups" rows="6" placeholder="@group1&#10;@group2&#10;https://t.me/group3&#10;..." required></textarea>
             </div>
             
             <button type="submit" class="submit-btn">🚀 Start Posting</button>
@@ -518,9 +485,8 @@ HOME_HTML = """
     </div>
     
     <script>
-        const fileInput = document.getElementById('photos');
+        const fileInput = document.getElementById('photo');
         const fileList = document.getElementById('fileList');
-        
         fileInput.addEventListener('change', function() {
             if (this.files.length > 0) {
                 fileList.style.display = 'block';
@@ -540,39 +506,6 @@ HOME_HTML = """
 </html>
 """
 
-SUCCESS_HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Posting Started</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }}
-        .container {{ background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); max-width: 700px; width: 100%; padding: 40px; text-align: center; }}
-        .success {{ color: #4caf50; font-size: 48px; margin-bottom: 20px; }}
-        h2 {{ color: #333; margin-bottom: 20px; }}
-        .details {{ color: #666; font-size: 16px; line-height: 1.8; margin-bottom: 30px; }}
-        .back-btn {{ display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 10px; text-decoration: none; font-weight: 600; transition: transform 0.2s; }}
-        .back-btn:hover {{ transform: translateY(-2px); }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="success">✓</div>
-        <h2>Posting Started!</h2>
-        <div class="details">
-            <p>📊 <strong>{photos_count}</strong> photo(s) will be sent</p>
-            <p>📍 To <strong>{groups_count}</strong> group(s)</p>
-            <p>⏱️ On a <strong>1-hour cycle</strong></p>
-            <p style="margin-top: 20px; font-size: 14px; color: #999;">The app will now post automatically. You can close this page.</p>
-        </div>
-        <a href="/" class="back-btn">← Back to Home</a>
-    </div>
-</body>
-</html>
-"""
-
 @app.get("/", response_class=HTMLResponse)
 async def home():
     if not session_file.exists():
@@ -588,19 +521,20 @@ async def auth(phone: str = Form(...)):
     try:
         client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
         await client.connect()
-        
-        # Request code
         result = await client.send_code_request(phone)
+        await client.disconnect()
+        
         print(f"[AUTH] Code sent to {phone}")
         
-        return HTMLResponse(CODE_HTML.format(phone=phone))
+        html = CODE_HTML.replace("PHONE_PLACEHOLDER", phone).replace("HASH_PLACEHOLDER", result.phone_code_hash)
+        return HTMLResponse(html)
     
     except Exception as e:
         print(f"[AUTH ERROR] {e}")
         return HTMLResponse(f"<h3>Error: {str(e)}</h3><p><a href='/'>Back</a></p>")
 
 @app.post("/verify")
-async def verify(phone: str = Form(...), code: str = Form(...)):
+async def verify(phone: str = Form(...), code: str = Form(...), phone_code_hash: str = Form(...)):
     """Verify the code and complete authentication"""
     if not API_ID or not API_HASH:
         return HTMLResponse("<h3>Error: API credentials not configured</h3>")
@@ -609,70 +543,43 @@ async def verify(phone: str = Form(...), code: str = Form(...)):
         client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
         await client.connect()
         
-        # Sign in with code
         try:
-            user = await client.sign_in(phone, code)
+            user = await client.sign_in(phone, code, phone_code_hash=phone_code_hash)
+            print(f"[AUTH SUCCESS] {user.first_name}")
         except SessionPasswordNeededError:
-            # User has 2FA enabled - for now, show error
-            return HTMLResponse(
-                "<h3>⚠️ Two-Factor Authentication Enabled</h3>"
-                "<p>Your account has 2FA enabled. Please try again with a bot token instead.</p>"
-                "<p><a href='/'>Back to Home</a></p>"
-            )
+            await client.disconnect()
+            return HTMLResponse("<h3>Error: 2FA not supported</h3><p><a href='/'>Back</a></p>")
         
         await client.disconnect()
         
-        # Redirect to home
-        return HTMLResponse(
-            "<h3>✓ Authentication Successful!</h3>"
-            "<p>Redirecting...</p>"
-            "<script>setTimeout(() => window.location.href = '/', 2000);</script>"
-        )
+        return HTMLResponse("""
+            <h3>✓ Authenticated Successfully!</h3>
+            <p>Redirecting...</p>
+            <script>setTimeout(() => window.location.href = '/', 2000);</script>
+        """)
     
     except Exception as e:
         print(f"[VERIFY ERROR] {e}")
-        return HTMLResponse(
-            f"<h3>Error: Invalid code or phone number</h3>"
-            f"<p>{str(e)}</p>"
-            f"<p><a href='/'>Back to Home</a></p>"
-        )
+        return HTMLResponse(f"<h3>Error: {str(e)}</h3><p><a href='/'>Back</a></p>")
 
-async def post_to_groups(photo_files: list[str], caption: str, groups: list[str]):
-    if not API_ID or not API_HASH:
-        print("[ERROR] API_ID or API_HASH not configured!")
-        return
-    
-    try:
-        client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
-        await client.connect()
-        
-        if not await client.is_user_authorized():
-            print("[ERROR] Client not authorized.")
-            await client.disconnect()
-            return
-        
+async def post_to_groups(photo_file_path: str, caption: str, groups: list[str]):
+    async with TelegramClient(SESSION_NAME, API_ID, API_HASH) as client:
         total_groups = len(groups)
         if total_groups == 0:
             print("No groups provided!")
-            await client.disconnect()
             return
 
         avg_interval = CYCLE_DURATION / total_groups
         low = avg_interval * 0.7
         high = avg_interval * 1.3
 
-        print(f"✓ Connected. Posting to {total_groups} groups with {len(photo_files)} photos...")
+        print(f"Loaded {total_groups} groups. Starting posting cycle...")
 
         while True:
             for group in groups:
                 try:
-                    for idx, photo_file in enumerate(photo_files):
-                        if idx == 0:
-                            await client.send_file(group, photo_file, caption=caption)
-                        else:
-                            await client.send_file(group, photo_file)
-                    
-                    print(f"[+] Sent {len(photo_files)} photo(s) to {group}")
+                    await client.send_file(group, photo_file_path, caption=caption)
+                    print(f"[+] Sent to {group}")
 
                     sleep_time = random.uniform(low, high)
                     print(f"   Waiting {int(sleep_time)} seconds...\n")
@@ -682,60 +589,15 @@ async def post_to_groups(photo_files: list[str], caption: str, groups: list[str]
                     print(f"[ERROR sending to {group}] {e}")
 
             print("===== 1-HOUR CYCLE FINISHED. Starting new cycle... =====\n")
-    
-    except Exception as e:
-        print(f"[CRITICAL ERROR] {e}")
-    finally:
-        try:
-            await client.disconnect()
-        except:
-            pass
 
 @app.post("/send")
-async def send(caption: str = Form(...), groups: str = Form(...), photos: list[UploadFile] = File(...)):
-    # Validate that we have credentials
-    if not API_ID or not API_HASH:
-        return HTMLResponse(
-            "<h3 style='color: red;'>❌ Error: Telegram API credentials not configured!</h3>"
-        )
-    
-    # Check if session exists
-    if not session_file.exists():
-        return HTMLResponse(
-            "<h3 style='color: red;'>❌ Error: Not authenticated!</h3>"
-            "<p><a href='/'>← Authenticate First</a></p>"
-        )
-    
-    # Check if at least one file was provided
-    if not photos or (len(photos) == 1 and photos[0].filename == ''):
-        return HTMLResponse(
-            "<h3 style='color: red;'>❌ Error: Please select at least one photo!</h3>"
-            "<p><a href='/'>← Back to Form</a></p>"
-        )
-    
-    # Save uploaded files temporarily
-    photo_files = []
-    for photo in photos:
-        if photo.filename:
-            photo_file_path = f"temp_{int(time.time())}_{photo.filename}"
-            with open(photo_file_path, "wb") as f:
-                f.write(await photo.read())
-            photo_files.append(photo_file_path)
+async def send(caption: str = Form(...), groups: str = Form(...), photo: UploadFile = File(...)):
+    photo_file_path = f"temp_{int(time.time())}_{photo.filename}"
+    with open(photo_file_path, "wb") as f:
+        f.write(await photo.read())
 
     group_list = [g.strip() for g in groups.splitlines() if g.strip()]
-    
-    if not group_list:
-        return HTMLResponse(
-            "<h3 style='color: red;'>❌ Error: Please enter at least one group link!</h3>"
-            "<p><a href='/'>← Back to Form</a></p>"
-        )
 
-    # Start background task for posting
-    asyncio.create_task(post_to_groups(photo_files, caption, group_list))
+    asyncio.create_task(post_to_groups(photo_file_path, caption, group_list))
 
-    return HTMLResponse(
-        SUCCESS_HTML_TEMPLATE.format(
-            photos_count=len(photo_files),
-            groups_count=len(group_list)
-        )
-    )
+    return HTMLResponse(f"<h3>Started posting to {len(group_list)} groups!</h3>")
