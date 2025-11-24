@@ -156,7 +156,7 @@ AUTH_HTML = """
             ⚠️ You need to authenticate once to use this app. We'll send you a code via Telegram.
         </div>
         
-        <form action="/auth-phone" method="post">
+        <form action="/auth" method="post">
             <div class="form-group">
                 <label>Phone Number</label>
                 <input type="tel" name="phone" placeholder="+1234567890" required>
@@ -291,7 +291,7 @@ CODE_HTML = """
             📨 You should have received a code. Enter it below to complete authentication.
         </div>
         
-        <form action="/auth-verify" method="post">
+        <form action="/verify" method="post">
             <input type="hidden" name="phone" value="{phone}">
             
             <div class="form-group">
