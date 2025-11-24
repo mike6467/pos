@@ -43,3 +43,7 @@ externalPort = 80
 [[ports]]
 localPort = 45589
 externalPort = 3000
+
+[deployment]
+deploymentTarget = "vm"
+run = ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "5000"]
